@@ -23,13 +23,12 @@ Este projeto fornece uma API que extrai a coluna **Tendências** do Google Trend
 
 1. Clone este repositório ou copie os arquivos para sua máquina.
 2. Crie e ative um ambiente virtual (opcional, mas recomendado):
+
    ```bash
    python -m venv .venv
    source .venv/bin/activate   # Linux/macOS
    .venv\Scripts\activate      # Windows
    ```
-
-````
 
 3. Instale as dependências:
 
@@ -43,7 +42,7 @@ Este projeto fornece uma API que extrai a coluna **Tendências** do Google Trend
 
 Crie um arquivo `.env` na raiz do projeto com as variáveis abaixo:
 
-```env
+````env
 # Host e porta onde a API irá rodar
 API_HOST=127.0.0.1
 API_PORT=8052
@@ -59,7 +58,6 @@ COOKIES_FILE=cookies.json
 
 # Nível de log: DEBUG, INFO, WARNING, ERROR, CRITICAL
 LOG_LEVEL=INFO
-```
 
 ---
 
@@ -70,7 +68,8 @@ LOG_LEVEL=INFO
 
    ```bash
    python trends_api.py
-   ```
+````
+
 3. Acesse o endpoint:
 
    ```bash
@@ -122,4 +121,6 @@ def scrape_trends():
 
 Este projeto está sob a [MIT License](LICENSE). Feel free to use and modify!
 
-````
+```
+
+```
