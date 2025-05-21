@@ -122,5 +122,4 @@ def scrape_trends():
 
 Este projeto está sob a [MIT License](LICENSE). Feel free to use and modify!
 
-```
 ````
