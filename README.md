@@ -42,7 +42,7 @@ Este projeto fornece uma API que extrai a coluna **Tendências** do Google Trend
 
 Crie um arquivo `.env` na raiz do projeto com as variáveis abaixo:
 
-````env
+```env
 # Host e porta onde a API irá rodar
 API_HOST=127.0.0.1
 API_PORT=8052
@@ -58,6 +58,7 @@ COOKIES_FILE=cookies.json
 
 # Nível de log: DEBUG, INFO, WARNING, ERROR, CRITICAL
 LOG_LEVEL=INFO
+```
 
 ---
 
@@ -124,4 +125,7 @@ Este projeto está sob a [MIT License](LICENSE). Feel free to use and modify!
 ```
 
 ```
-````
+
+```
+
+```
