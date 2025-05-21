@@ -1,0 +1,18 @@
+# docker-compose.yml
+version: "3.8"
+
+services:
+  trends-api:
+    build: .
+    container_name: trends-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Garante que a API escute em todas as interfaces
+    environment:
+      - API_HOST=0.0.0.0
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    # Se você quiser persistir cookies para evitar bloqueios:
+    # volumes:
+    #   - ./cookies.json:/app/cookies.json
