@@ -40,8 +40,8 @@ class TrendsResponse(BaseModel):
     trends: List[str]
 
 class InfogramResponse(BaseModel):
-    table1: List[List[str]]
-    table2: List[List[str]]
+    carteira: List[List[str]]
+    movimentacao: List[List[str]]
 
 def build_driver() -> webdriver.Chrome:
     opts = Options()
@@ -111,7 +111,7 @@ def scrape_infogram(url: str) -> dict:
         )
         tbl1 = driver.find_element(By.CSS_SELECTOR, sel1)
         rows1 = tbl1.find_elements(By.CSS_SELECTOR, "tbody tr")
-        table1 = [
+        carteira = [
             [cell.text.strip() for cell in row.find_elements(By.TAG_NAME, "td")]
             for row in rows1
         ]
@@ -123,12 +123,12 @@ def scrape_infogram(url: str) -> dict:
         )
         tbl2 = driver.find_element(By.CSS_SELECTOR, sel2)
         rows2 = tbl2.find_elements(By.CSS_SELECTOR, "tbody tr")
-        table2 = [
+        movimentacao = [
             [cell.text.strip() for cell in row.find_elements(By.TAG_NAME, "td")]
             for row in rows2
         ]
 
-        return {"table1": table1, "table2": table2}
+        return {"carteira": carteira, "movimentacao": movimentacao}
     finally:
         driver.quit()
 
