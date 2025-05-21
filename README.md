@@ -68,7 +68,7 @@ LOG_LEVEL=INFO
 
    ```bash
    python trends_api.py
-````
+   ```
 
 3. Acesse o endpoint:
 
@@ -124,3 +124,4 @@ Este projeto está sob a [MIT License](LICENSE). Feel free to use and modify!
 ```
 
 ```
+````
