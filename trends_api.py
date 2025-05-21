@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FastAPI + Selenium: extrai 'Tendências' do Google Trends BR
-com perfil de usuário isolado e modo incognito opcional.
+e adiciona endpoint para raspar Infogram.
 """
 
 import os
@@ -10,8 +10,9 @@ import json
 import logging
 import tempfile
 from pathlib import Path
+from typing import List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -33,30 +34,31 @@ COOKIES_FILE = Path(__file__).parent / os.getenv("COOKIES_FILE", "cookies.json")
 logging.basicConfig(level=LOG_LEVEL,
                     format="%(asctime)s %(levelname)s %(message)s")
 
-app = FastAPI(title="Google Trends Scraper API")
+app = FastAPI(title="Google Trends & Infogram Scraper API")
 
 class TrendsResponse(BaseModel):
-    trends: list[str]
+    trends: List[str]
+
+class InfogramResponse(BaseModel):
+    table1: List[List[str]]
+    table2: List[List[str]]
 
 def build_driver() -> webdriver.Chrome:
     opts = Options()
-    opts.add_argument("--no-sandbox")               # necessário se rodar como root :contentReference[oaicite:13]{index=13}
+    opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--headless")                 # headless clássico se “new” falhar :contentReference[oaicite:14]{index=14}
+    opts.add_argument("--headless")
     opts.add_argument("--disable-blink-features=AutomationControlled")
     opts.add_argument("--disable-infobars")
-    # Isola o perfil em um diretório único temporário :contentReference[oaicite:15]{index=15}
     profile_dir = tempfile.mkdtemp(prefix="chrome_profile_")
     opts.add_argument(f"--user-data-dir={profile_dir}")
-    # ou, alternativamente, use o modo incógnito e não especifique user-data-dir:
-    # opts.add_argument("--incognito")              # modo incognito :contentReference[oaicite:16]{index=16}
     opts.add_argument(
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
     )
     return webdriver.Chrome(options=opts)
 
-def scrape_trends() -> list[str]:
+def scrape_trends() -> List[str]:
     driver = build_driver()
     try:
         logging.info("Abrindo Trends…")
@@ -94,12 +96,63 @@ def scrape_trends() -> list[str]:
     finally:
         driver.quit()
 
+def scrape_infogram(url: str) -> dict:
+    driver = build_driver()
+    try:
+        logging.info(f"Abrindo Infogram: {url}")
+        driver.get(url)
+        # espera o conteúdo dinâmico carregar
+        time.sleep(6)
+
+        # tabela 1
+        sel1 = "#tabpanel-chart-3 > div > div > div > table"
+        WebDriverWait(driver, TIMEOUT).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, sel1))
+        )
+        tbl1 = driver.find_element(By.CSS_SELECTOR, sel1)
+        rows1 = tbl1.find_elements(By.CSS_SELECTOR, "tbody tr")
+        table1 = [
+            [cell.text.strip() for cell in row.find_elements(By.TAG_NAME, "td")]
+            for row in rows1
+        ]
+
+        # tabela 2
+        sel2 = "#tabpanel-chart-2 > div > div > div > table"
+        WebDriverWait(driver, TIMEOUT).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, sel2))
+        )
+        tbl2 = driver.find_element(By.CSS_SELECTOR, sel2)
+        rows2 = tbl2.find_elements(By.CSS_SELECTOR, "tbody tr")
+        table2 = [
+            [cell.text.strip() for cell in row.find_elements(By.TAG_NAME, "td")]
+            for row in rows2
+        ]
+
+        return {"table1": table1, "table2": table2}
+    finally:
+        driver.quit()
+
 @app.get("/trends", response_model=TrendsResponse)
 def get_trends():
     try:
         return {"trends": scrape_trends()}
     except Exception as e:
         logging.exception("Erro ao raspar tendências")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/infogram", response_model=InfogramResponse)
+def get_infogram(
+    url: str = Query(..., description="URL da página do Infogram (ex: https://infogram.com/...)")
+):
+    """
+    Recebe a URL de um Infogram e retorna as duas tabelas:
+      - tabela1: selector '#tabpanel-chart-3 > div > div > div > table'
+      - tabela2: selector '#tabpanel-chart-2 > div > div > div > table'
+    """
+    try:
+        return scrape_infogram(url)
+    except Exception as e:
+        logging.exception("Erro ao raspar Infogram")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
