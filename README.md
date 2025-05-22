@@ -75,6 +75,18 @@ LOG_LEVEL=INFO
 
    ```bash
    curl http://127.0.0.1:8052/trends
+   
+   Trends do BRasil apenas
+   curl http://127.0.0.1:8052/trends?geo=BR
+   
+   Trends do BRasil e categoria 18 - Tecnologia
+   curl http://127.0.0.1:8052/trends?geo=BR&category=18
+   
+   Trends dos EUA e categoria 18 - Tecnologia
+   curl http://127.0.0.1:8052/trends?geo=US&category=18
+   
+   Lista de categorias
+   curl http://127.0.0.1:8052/categories
    ```
 
 Você deverá receber uma resposta em JSON assim:
