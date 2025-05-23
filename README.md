@@ -79,11 +79,29 @@ LOG_LEVEL=INFO
    Trends do Brasil apenas
    curl "http://127.0.0.1:8052/trends?geo=BR"
    
+   Trends da categoria 18 - Tecnologia
+   curl "http://127.0.0.1:8052/trends?category=18"
+
    Trends do Brasil e categoria 18 - Tecnologia
    curl "http://127.0.0.1:8052/trends?geo=BR&category=18"
    
    Trends dos EUA e categoria 18 - Tecnologia
    curl "http://127.0.0.1:8052/trends?geo=US&category=18"
+
+   Trends das últimas 48 horas
+   curl "http://127.0.0.1:8052/trends?hours=48"
+
+   Trends dos EUA, categoria 18 (Tecnologia), últimas 12h
+   curl "http://127.0.0.1:8052/trends?geo=US&category=18&hours=12"
+
+   Trends com status ativa (apenas ativa)
+   curl "http://127.0.0.1:8052/trends?geo=BR&status=active"
+
+   Trends ordenadas por critério (sort=search-volume, title, recency)
+   curl "http://127.0.0.1:8052/trends?geo=BR&sort=search-volume"
+
+   Combinando tudo: geo, categoria, horas, status e ordenação
+   curl "http://127.0.0.1:8052/trends?geo=BR&category=0&hours=24&status=active&sort=title"
    
    Lista de categorias
    curl "http://127.0.0.1:8052/categories"

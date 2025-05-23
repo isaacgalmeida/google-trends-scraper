@@ -38,7 +38,8 @@ logging.basicConfig(level=LOG_LEVEL,
 SUPPORTED_GEO_CODES = {
     "BR": "Brasil",
     "US": "Estados Unidos",
-    "UK": "Reino Unido",
+    "GB": "Reino Unido",
+    "GB-EN": "Reino Unido (Inglaterra)",
     "IN": "Índia",
     "CA": "Canadá",
     "AU": "Austrália",
@@ -96,8 +97,10 @@ def build_driver() -> webdriver.Chrome:
     )
     return webdriver.Chrome(options=opts)
 
-def scrape_trends(geo: str = None, category: str = None) -> List[str]:
-    # Monta URL com base nos parâmetros ou usa fallback
+def scrape_trends(geo: str = None, category: str = None, hours: str = None, status: str = None, sort: str = None ) -> List[str]:
+    url = "https://trends.google.com/trending?"
+    params = []
+
     if geo:
         geo = geo.upper()
         if geo not in SUPPORTED_GEO_CODES:
@@ -105,11 +108,21 @@ def scrape_trends(geo: str = None, category: str = None) -> List[str]:
                 status_code=400,
                 detail=f"Código de país '{geo}' não suportado. Use: {', '.join(SUPPORTED_GEO_CODES.keys())}"
             )
-        url = f"https://trends.google.com/trending?geo={geo}"
-        if category:
-            url += f"&category={category}"
+        params.append(f"geo={geo}")
+
+    if category:
+        params.append(f"category={category}")
+    if hours:
+        params.append(f"hours={hours}")
+    if status:
+        params.append(f"status={status}")
+    if sort:
+        params.append(f"sort={sort}")
+    
+    if params:
+        url += "&".join(params)
     else:
-        url = TRENDS_URL
+        url = TRENDS_URL  # fallback total
 
     driver = build_driver()
     try:
@@ -184,14 +197,18 @@ def scrape_infogram(url: str) -> dict:
 @app.get("/trends", response_model=TrendsResponse)
 def get_trends(
     geo: str = Query(None, description="Código do país (ex: BR, US, UK, IN...)"),
-    category: str = Query(None, description="Código da categoria (ex: 20 para Esportes)")
+    category: str = Query(None, description="Código da categoria (ex: 20 para Esportes)"),
+    hours: str = Query(None, description="Quantidade de horas (ex: 48 para últimas 48 horas)"),
+    status: str = Query(None, description="Status de tempo (NOW, WEEK, etc)"),
+    sort: str = Query(None, description="Critério de ordenação (ex: 0)")
 ):
     """
-    Retorna tendências por país (geo) e opcionalmente por categoria.
+    Retorna tendências por país (geo) e opcionalmente filtra por categoria, tempo que começou a ficar em alta (em horas).
     Se nada for passado, usa a URL padrão do .env (TRENDS_URL).
     """
+    logging.info(f"Parâmetros recebidos: geo={geo}, category={category}, hours={hours}, status={status}, sort={sort}")
     try:
-        return {"trends": scrape_trends(geo, category)}
+        return {"trends": scrape_trends(geo, category, hours, status, sort)}
     except Exception as e:
         logging.exception("Erro ao raspar tendências")
         raise HTTPException(status_code=500, detail=str(e))
