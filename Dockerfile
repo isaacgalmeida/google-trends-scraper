@@ -1,5 +1,5 @@
 # Dockerfile
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 # Instala dependências do sistema para Chrome/Chromium e drivers
 RUN apt-get update \
