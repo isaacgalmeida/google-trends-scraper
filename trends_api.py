@@ -102,6 +102,11 @@ class InfogramResponse(BaseModel):
     carteira: List[List[str]]
     movimentacao: List[List[str]]
 
+class BitcoinTopResponse(BaseModel):
+    valor: str
+    data: str
+    descricao: str
+
 def build_driver() -> webdriver.Chrome:
     opts = Options()
     opts.add_argument("--no-sandbox")
@@ -202,6 +207,52 @@ def scrape_infogram(url: str) -> dict:
     finally:
         driver.quit()
 
+def scrape_bitcoin_top() -> dict:
+    """Extrai informações do Bitcoin da página https://ullqyiyh.manus.space/"""
+    url = "https://ullqyiyh.manus.space/"
+    driver = build_driver()
+    try:
+        logging.info(f"Abrindo página Bitcoin: {url}")
+        driver.get(url)
+        time.sleep(5)
+
+        # Seletor principal para o valor
+        valor_selector = "#root > div > main > section.text-center.mb-12 > div > div.text-center.mb-6 > div.text-6xl.font-bold.text-foreground.mb-2"
+        
+        # Aguarda o elemento carregar
+        WebDriverWait(driver, TIMEOUT).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, valor_selector))
+        )
+        
+        # Extrai o valor
+        valor_element = driver.find_element(By.CSS_SELECTOR, valor_selector)
+        valor = valor_element.text.strip()
+        
+        # Extrai a data (elemento seguinte)
+        data_selector = "#root > div > main > section.text-center.mb-12 > div > div.text-center.mb-6 > div.text-sm.text-muted-foreground"
+        try:
+            data_element = driver.find_element(By.CSS_SELECTOR, data_selector)
+            data = data_element.text.strip()
+        except:
+            data = "Data não disponível"
+        
+        # Extrai a descrição (título da seção)
+        descricao_selector = "#root > div > main > section.text-center.mb-12 > div > div.text-center.mb-6 > h2.text-lg.font-medium.text-muted-foreground.mb-2"
+        try:
+            descricao_element = driver.find_element(By.CSS_SELECTOR, descricao_selector)
+            descricao = descricao_element.text.strip()
+        except:
+            descricao = "CONFIANÇA DE ESTAR NO TOPO"
+        
+        return {
+            "valor": valor,
+            "data": data,
+            "descricao": descricao
+        }
+        
+    finally:
+        driver.quit()
+
 @app.get("/trends", response_model=TrendsResponse)
 def get_trends(
     geo: str = Query(None, description="Código do país (ex: BR, US, UK, IN...)"),
@@ -237,6 +288,23 @@ def get_infogram(
         return scrape_infogram(url)
     except Exception as e:
         logging.exception("Erro ao raspar Infogram")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/topobitcoin", response_model=BitcoinTopResponse)
+def get_topo_bitcoin():
+    """
+    Extrai informações do indicador CBBI (Confiança de Estar no Topo) do Bitcoin
+    da página https://ullqyiyh.manus.space/
+    
+    Retorna:
+    - valor: O valor atual do indicador
+    - data: Data da última atualização
+    - descricao: Descrição do indicador
+    """
+    try:
+        return scrape_bitcoin_top()
+    except Exception as e:
+        logging.exception("Erro ao raspar dados do Bitcoin")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
