@@ -11,9 +11,12 @@ import logging
 import tempfile
 from pathlib import Path
 from typing import List
+from collections import defaultdict, deque
+from datetime import datetime, timedelta
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -22,6 +25,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+from security_config import is_ip_suspicious, is_path_blocked, is_user_agent_blocked
 
 # --- Carrega .env ---
 load_dotenv()
@@ -94,6 +99,117 @@ CATEGORIES = {
 }
 
 app = FastAPI(title="Google Trends & Infogram Scraper API")
+
+# Configuração de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Em produção, especifique domínios específicos
+    allow_credentials=True,
+    allow_methods=["GET"],  # Apenas métodos necessários
+    allow_headers=["*"],
+)
+
+# Rate limiting simples em memória
+request_counts = defaultdict(lambda: deque())
+RATE_LIMIT_REQUESTS = 10  # máximo de requests
+RATE_LIMIT_WINDOW = 60    # por minuto
+BLOCKED_IPS = set()
+
+def is_suspicious_request(path: str, user_agent: str = "", client_ip: str = "") -> bool:
+    """Detecta requisições suspeitas"""
+    # Verifica IP suspeito
+    if client_ip and is_ip_suspicious(client_ip):
+        return True
+    
+    # Verifica path bloqueado
+    if is_path_blocked(path):
+        return True
+    
+    # Verifica user agent bloqueado
+    if is_user_agent_blocked(user_agent):
+        return True
+    
+    # Verifica tentativas de path traversal
+    if '../' in path or '..\\' in path:
+        return True
+    
+    return False
+
+def check_rate_limit(client_ip: str) -> bool:
+    """Verifica rate limiting por IP"""
+    if client_ip in BLOCKED_IPS:
+        return False
+    
+    now = datetime.now()
+    minute_ago = now - timedelta(seconds=RATE_LIMIT_WINDOW)
+    
+    # Remove requests antigos
+    while request_counts[client_ip] and request_counts[client_ip][0] < minute_ago:
+        request_counts[client_ip].popleft()
+    
+    # Verifica se excedeu o limite
+    if len(request_counts[client_ip]) >= RATE_LIMIT_REQUESTS:
+        BLOCKED_IPS.add(client_ip)
+        logging.warning(f"IP {client_ip} bloqueado por excesso de requests")
+        return False
+    
+    # Adiciona request atual
+    request_counts[client_ip].append(now)
+    return True
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Middleware de segurança"""
+    client_ip = request.client.host
+    path = request.url.path
+    user_agent = request.headers.get("user-agent", "")
+    
+    # Log de tentativas suspeitas
+    if is_suspicious_request(path, user_agent, client_ip):
+        logging.warning(f"🚨 BLOCKED: {client_ip} - {request.method} {path} - UA: {user_agent[:100]}")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"detail": "Not found"}
+        )
+    
+    # Rate limiting
+    if not check_rate_limit(client_ip):
+        logging.warning(f"🚫 RATE LIMITED: {client_ip}")
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Too many requests"}
+        )
+    
+    # Bloqueia métodos não permitidos
+    allowed_methods = ["GET", "OPTIONS"]
+    if request.method not in allowed_methods:
+        logging.warning(f"🚫 METHOD NOT ALLOWED: {client_ip} - {request.method} {path}")
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={"detail": "Method not allowed"}
+        )
+    
+    # Log de requests legítimos
+    if path in ["/trends", "/categories", "/infogram", "/topobitcoin"]:
+        logging.info(f"✅ ALLOWED: {client_ip} - {request.method} {path}")
+    
+    response = await call_next(request)
+    return response
+
+@app.get("/")
+async def root():
+    """Endpoint raiz com informações básicas"""
+    return {
+        "message": "Google Trends & Bitcoin Scraper API",
+        "version": "1.0.0",
+        "endpoints": [
+            "/trends - Google Trends data",
+            "/categories - Available categories",
+            "/infogram - Infogram scraping",
+            "/topobitcoin - Bitcoin top indicator",
+            "/docs - API documentation"
+        ]
+    }
 
 class TrendsResponse(BaseModel):
     trends: List[str]
@@ -255,6 +371,7 @@ def scrape_bitcoin_top() -> dict:
 
 @app.get("/trends", response_model=TrendsResponse)
 def get_trends(
+    request: Request,
     geo: str = Query(None, description="Código do país (ex: BR, US, UK, IN...)"),
     category: str = Query(None, description="Código da categoria (ex: 20 para Esportes)")
 ):
@@ -263,20 +380,23 @@ def get_trends(
     Se nada for passado, usa a URL padrão do .env (TRENDS_URL).
     """
     try:
+        logging.info(f"Trends request from {request.client.host}")
         return {"trends": scrape_trends(geo, category)}
     except Exception as e:
         logging.exception("Erro ao raspar tendências")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/categories")
-def get_categories():
+def get_categories(request: Request):
     """
     Retorna a lista de categorias disponíveis no Google Trends.
     """
+    logging.info(f"Categories request from {request.client.host}")
     return JSONResponse(content=CATEGORIES)
 
 @app.get("/infogram", response_model=InfogramResponse)
 def get_infogram(
+    request: Request,
     url: str = Query(..., description="URL da página do Infogram (ex: https://infogram.com/...)")
 ):
     """
@@ -285,13 +405,14 @@ def get_infogram(
       - tabela2: selector '#tabpanel-chart-2 > div > div > div > table'
     """
     try:
+        logging.info(f"Infogram request from {request.client.host}")
         return scrape_infogram(url)
     except Exception as e:
         logging.exception("Erro ao raspar Infogram")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/topobitcoin", response_model=BitcoinTopResponse)
-def get_topo_bitcoin():
+def get_topo_bitcoin(request: Request):
     """
     Extrai informações do indicador CBBI (Confiança de Estar no Topo) do Bitcoin
     da página https://ullqyiyh.manus.space/
@@ -302,6 +423,7 @@ def get_topo_bitcoin():
     - descricao: Descrição do indicador
     """
     try:
+        logging.info(f"Bitcoin request from {request.client.host}")
         return scrape_bitcoin_top()
     except Exception as e:
         logging.exception("Erro ao raspar dados do Bitcoin")
